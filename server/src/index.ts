@@ -24,7 +24,12 @@ async function main() {
     disableRequestLogging: false,
   });
 
-  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  // CORS_ORIGIN — CSV. Capacitor Android (androidScheme=https) грузит WebView
+  // с origin "https://localhost", iOS — "capacitor://localhost", Vite dev —
+  // "http://localhost:5173". Всё это должно совпасть со списком, иначе preflight
+  // отшибает все cross-origin fetch'и из приложения.
+  const corsOrigins = env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+  await app.register(cors, { origin: corsOrigins, credentials: true });
   await app.register(cookie);
   await app.register(rateLimit, {
     max: 200,

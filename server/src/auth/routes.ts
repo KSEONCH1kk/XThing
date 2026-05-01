@@ -27,10 +27,14 @@ const loginSchema = z.object({
 const refreshCookie = "xthing_rt";
 
 function setRefreshCookie(reply: any, token: string) {
+  // В проде клиент (Capacitor https://localhost, Electron app://, web
+  // https://ccc.intave.tech) шлёт запросы cross-site → нужен SameSite=None,
+  // что в свою очередь требует Secure. В dev (http) оставляем Lax.
+  const isProd = env.NODE_ENV === "production";
   reply.setCookie(refreshCookie, token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: env.NODE_ENV === "production",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
     path: "/auth",
     maxAge: env.JWT_REFRESH_TTL,
   });
@@ -123,7 +127,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const hash = verifyRefreshHash(token);
       await revokeRefresh(hash);
     }
-    reply.clearCookie(refreshCookie, { path: "/auth" });
+    const isProd = env.NODE_ENV === "production";
+    reply.clearCookie(refreshCookie, {
+      path: "/auth",
+      sameSite: isProd ? "none" : "lax",
+      secure: isProd,
+    });
     return reply.send({ ok: true });
   });
 }
