@@ -6,21 +6,34 @@ SHELL := /bin/bash
 # Все compose-команды читают .env.docker для подстановки ${VAR} в compose.yml.
 COMPOSE := docker compose --env-file .env.docker
 
-.PHONY: help up down restart build deploy logs ps cert backup admin
+.PHONY: help bootstrap up down restart build deploy logs ps cert backup admin
 
 help:
 	@echo "XThing — production targets:"
-	@echo "  make up           — поднять весь стек (server, nginx, опубликовать client)"
-	@echo "  make down         — остановить"
-	@echo "  make restart      — перезапустить server и nginx"
-	@echo "  make build        — пересобрать server и client образы"
-	@echo "  make deploy       — git pull + build + republish client + restart server"
-	@echo "  make logs         — лайв-логи всего стека"
-	@echo "  make ps           — статус контейнеров"
-	@echo "  make cert         — первоначальное получение TLS"
-	@echo "  make backup       — pg_dump в /var/backups/xthing/"
-	@echo "  make admin EMAIL=you@example.com  — назначить пользователя админом"
+	@echo ""
+	@echo "  Первый запуск (с нуля):"
+	@echo "    make build       — собрать образы server и client"
+	@echo "    make bootstrap   — поднять БД, server, опубликовать client, получить TLS, поднять nginx"
+	@echo ""
+	@echo "  Регулярные команды:"
+	@echo "    make up          — поднять весь стек (если сертификаты уже есть)"
+	@echo "    make down        — остановить"
+	@echo "    make restart     — перезапустить server и nginx"
+	@echo "    make deploy      — git pull + build + republish + restart"
+	@echo "    make logs        — лайв-логи"
+	@echo "    make ps          — статус контейнеров"
+	@echo "    make cert        — обновить TLS вручную (обычно не нужно)"
+	@echo "    make backup      — pg_dump в /var/backups/xthing/"
+	@echo "    make admin EMAIL=you@example.com  — назначить админом"
 
+# Первый запуск: БД + сервер + публикация клиента + получение сертификата + nginx.
+# Скрипт init-letsencrypt.sh сам поднимет nginx и certbot после успешного certonly.
+bootstrap:
+	$(COMPOSE) up -d postgres redis server
+	$(COMPOSE) up client_publisher
+	./scripts/init-letsencrypt.sh
+
+# Обычный запуск (когда сертификаты уже есть в volume).
 up:
 	$(COMPOSE) up -d postgres redis server
 	$(COMPOSE) up client_publisher
