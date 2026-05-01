@@ -1,0 +1,28 @@
+appId: com.xthing.vpn
+productName: XThing
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../client/dist
+    to: client
+  - from: bin
+    to: bin
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: "XThing-${version}-${arch}.${ext}"
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: XThing VPN
+publish: null

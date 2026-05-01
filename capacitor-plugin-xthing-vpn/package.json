@@ -1,0 +1,33 @@
+{
+  "name": "capacitor-plugin-xthing-vpn",
+  "version": "1.0.0",
+  "description": "XThing native VPN plugin for Capacitor (Android VpnService + TUN + xray/hysteria)",
+  "main": "stub.js",
+  "module": "stub.js",
+  "types": "stub.d.ts",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "android/proguard-rules.pro",
+    "stub.js",
+    "stub.d.ts",
+    "src/",
+    "XThingVpnPlugin.podspec"
+  ],
+  "scripts": {
+    "verify:android": "cd android && ./gradlew clean build test && cd .."
+  },
+  "keywords": ["capacitor", "vpn", "android", "xray", "hysteria"],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  }
+}

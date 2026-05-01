@@ -1,0 +1,37 @@
+{
+  "name": "xthing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "XThing VPN — Desktop (Electron) & Mobile (Capacitor) client + backend",
+  "workspaces": [
+    "client",
+    "server",
+    "electron",
+    "capacitor-plugin-xthing-vpn"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c \"yellow,cyan\" \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "dev:electron": "npm --workspace electron run dev",
+    "seed": "npm --workspace server run seed",
+    "build:client": "npm --workspace client run build",
+    "build:server": "npm --workspace server run build",
+    "build:electron": "npm --workspace electron run build",
+    "build:all": "npm run build:server && npm run build:client && npm run build:electron",
+    "dist:win": "npm run build:client && npm run build:electron && npm --workspace electron run dist",
+    "android:sync": "npm run build:client && npx cap sync android",
+    "android:open": "npx cap open android",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}

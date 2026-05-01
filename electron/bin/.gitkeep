@@ -1,0 +1,22 @@
+Положите сюда (Windows):
+
+  xray.exe        — https://github.com/XTLS/Xray-core/releases/latest
+                    (Xray-windows-64.zip → xray.exe)
+
+  hysteria.exe    — https://github.com/apernet/hysteria/releases/latest
+                    (hysteria-windows-amd64.exe → переименовать в hysteria.exe)
+
+Опционально (для системной маршрутизации всего трафика через TUN):
+
+  tun2socks.exe   — https://github.com/xjasonlyu/tun2socks/releases/latest
+                    (tun2socks-windows-amd64.zip → tun2socks.exe)
+
+  wintun.dll      — https://www.wintun.net/builds/wintun-0.14.1.zip
+                    (wintun/bin/amd64/wintun.dll)
+
+Если tun2socks.exe + wintun.dll отсутствуют — приложение работает в SOCKS-only
+режиме (127.0.0.1:10808). Браузеры с настройкой proxy будут идти через VPN,
+но не системные приложения.
+
+Для TUN-режима XThing нужно запускать ОТ ИМЕНИ АДМИНИСТРАТОРА — иначе
+команда `route ADD` упадёт с access denied.

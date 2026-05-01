@@ -1,0 +1,24 @@
+{
+  "name": "@xthing/electron",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && node scripts/copy-proto.cjs && cross-env NODE_ENV=development electron .",
+    "build": "tsc -p tsconfig.json && node scripts/copy-proto.cjs",
+    "start": "electron .",
+    "dist": "electron-builder --win --config electron-builder.yml"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.11.1",
+    "@grpc/proto-loader": "^0.7.13",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "cross-env": "^7.0.3",
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4"
+  }
+}
