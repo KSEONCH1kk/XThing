@@ -3,11 +3,14 @@
 
 SHELL := /bin/bash
 
+# Все compose-команды читают .env.docker для подстановки ${VAR} в compose.yml.
+COMPOSE := docker compose --env-file .env.docker
+
 .PHONY: help up down restart build deploy logs ps cert backup admin
 
 help:
 	@echo "XThing — production targets:"
-	@echo "  make up           — поднять весь стек"
+	@echo "  make up           — поднять весь стек (server, nginx, опубликовать client)"
 	@echo "  make down         — остановить"
 	@echo "  make restart      — перезапустить server и nginx"
 	@echo "  make build        — пересобрать server и client образы"
@@ -19,33 +22,33 @@ help:
 	@echo "  make admin EMAIL=you@example.com  — назначить пользователя админом"
 
 up:
-	docker compose up -d postgres redis server
-	docker compose up client_publisher
-	docker compose up -d nginx certbot
+	$(COMPOSE) up -d postgres redis server
+	$(COMPOSE) up client_publisher
+	$(COMPOSE) up -d nginx certbot
 
 down:
-	docker compose down
+	$(COMPOSE) down
 
 restart:
-	docker compose restart server
-	docker compose exec nginx nginx -s reload
+	$(COMPOSE) restart server
+	$(COMPOSE) exec nginx nginx -s reload
 
 build:
-	docker compose build server client_build
+	$(COMPOSE) build server client_publisher
 
 deploy:
 	git pull --ff-only
-	docker compose build server client_build
-	docker compose up client_publisher
-	docker compose up -d server
-	docker compose exec nginx nginx -s reload
+	$(COMPOSE) build server client_publisher
+	$(COMPOSE) up client_publisher
+	$(COMPOSE) up -d server
+	$(COMPOSE) exec nginx nginx -s reload
 	@echo "✓ Deployed"
 
 logs:
-	docker compose logs -f --tail=200
+	$(COMPOSE) logs -f --tail=200
 
 ps:
-	docker compose ps
+	$(COMPOSE) ps
 
 cert:
 	./scripts/init-letsencrypt.sh
@@ -53,12 +56,12 @@ cert:
 backup:
 	@mkdir -p /var/backups/xthing
 	@DATE=$$(date +%Y%m%d-%H%M); \
-	docker compose exec -T postgres pg_dump -U xthing xthing \
+	$(COMPOSE) exec -T postgres pg_dump -U xthing xthing \
 	  | gzip > /var/backups/xthing/xthing-$$DATE.sql.gz; \
 	echo "Backup: /var/backups/xthing/xthing-$$DATE.sql.gz"
 	@find /var/backups/xthing -name 'xthing-*.sql.gz' -mtime +14 -delete
 
 admin:
 	@if [ -z "$(EMAIL)" ]; then echo "Usage: make admin EMAIL=you@example.com"; exit 1; fi
-	docker compose exec postgres psql -U xthing -d xthing \
+	$(COMPOSE) exec postgres psql -U xthing -d xthing \
 	  -c "UPDATE users SET is_admin=TRUE WHERE email='$(EMAIL)';"

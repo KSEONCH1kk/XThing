@@ -26,14 +26,14 @@ if [[ -z "${APP_DOMAIN:-}" || -z "${API_DOMAIN:-}" || -z "${LE_EMAIL:-}" ]]; the
 fi
 
 CERT_NAME="xthing"
+COMPOSE="docker compose --env-file .env.docker"
 
 echo "==> Запрос сертификата для: $APP_DOMAIN, $API_DOMAIN  (email: $LE_EMAIL)"
 echo
 
-# 1) Создаём временный self-signed cert чтобы nginx мог стартовать на 443.
-#    (Без него nginx упадёт при попытке загрузить отсутствующий fullchain.)
+# 1) Создаём временный self-signed cert чтобы nginx мог стартовать на 443
 echo "==> Генерирую временный dummy-cert (для запуска nginx)…"
-docker compose run --rm --entrypoint sh certbot -c "
+$COMPOSE run --rm --entrypoint sh certbot -c "
   set -e
   mkdir -p /etc/letsencrypt/live/${CERT_NAME}
   openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
@@ -44,11 +44,11 @@ docker compose run --rm --entrypoint sh certbot -c "
 
 # 2) Поднимаем nginx с dummy-cert
 echo "==> Поднимаю nginx…"
-docker compose up -d nginx
+$COMPOSE up -d nginx
 
 # 3) Удаляем dummy
 echo "==> Чищу dummy-cert…"
-docker compose run --rm --entrypoint sh certbot -c "
+$COMPOSE run --rm --entrypoint sh certbot -c "
   rm -rf /etc/letsencrypt/live/${CERT_NAME} \
          /etc/letsencrypt/archive/${CERT_NAME} \
          /etc/letsencrypt/renewal/${CERT_NAME}.conf
@@ -56,7 +56,7 @@ docker compose run --rm --entrypoint sh certbot -c "
 
 # 4) Запрашиваем настоящий cert через webroot challenge
 echo "==> Запрашиваю настоящий сертификат у Let's Encrypt…"
-docker compose run --rm certbot certonly \
+$COMPOSE run --rm certbot certonly \
   --webroot -w /var/www/certbot \
   --cert-name "$CERT_NAME" \
   -d "$APP_DOMAIN" -d "$API_DOMAIN" \
@@ -66,7 +66,7 @@ docker compose run --rm certbot certonly \
 
 # 5) Reload nginx — подхватит новый сертификат
 echo "==> Перезагружаю nginx…"
-docker compose exec nginx nginx -s reload
+$COMPOSE exec nginx nginx -s reload
 
 echo
 echo "✓ Готово. Откройте:"
@@ -74,4 +74,4 @@ echo "    https://$APP_DOMAIN  — клиент"
 echo "    https://$API_DOMAIN/health  — backend"
 echo
 echo "Для авто-обновления запустите:"
-echo "    docker compose up -d certbot"
+echo "    $COMPOSE up -d certbot"

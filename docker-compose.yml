@@ -2,15 +2,14 @@ name: xthing
 
 # Production stack: Postgres, Redis, Server (Fastify), Nginx (TLS), Certbot.
 #
+# ВАЖНО: используем --env-file .env.docker (см. Makefile), потому что Compose
+# по умолчанию читает только .env, а у нас отдельный файл для прода.
+#
 # Запуск с нуля:
 #   1) cp .env.docker.example .env.docker  &&  отредактировать
-#   2) docker compose build server client_build
-#   3) docker compose up -d postgres redis server
-#   4) docker compose up client_publisher          # одноразовый, опубликует статику
-#   5) ./scripts/init-letsencrypt.sh               # получить сертификаты
-#   6) docker compose up -d certbot                # включить автообновление
-#
-# Для локальной разработки используйте docker-compose.dev.yml.
+#   2) make build           — собрать образы server и client
+#   3) make up              — поднять postgres, redis, server, опубликовать client, поднять nginx+certbot
+#   4) make cert            — первоначальное получение TLS
 
 services:
   postgres:
@@ -58,8 +57,10 @@ services:
     expose:
       - "4000"
 
-  # Однократный билд клиента: артефакт-образ с /dist
-  client_build:
+  # Single-shot job: собирает client и копирует /dist в named volume.
+  # `make up` запускает его через `docker compose up client_publisher`,
+  # после чего контейнер выходит (restart: "no") — статика остаётся в volume.
+  client_publisher:
     build:
       context: .
       dockerfile: Dockerfile.client
@@ -67,17 +68,9 @@ services:
         VITE_API_URL: https://${API_DOMAIN}
         VITE_WS_URL: wss://${API_DOMAIN}
     image: xthing-client:latest
-    profiles: ["build"]
-
-  # Копирует /dist из client-образа в named volume client_dist (его маунтит nginx).
-  # Запускать каждый раз после пересборки client_build.
-  client_publisher:
-    image: xthing-client:latest
-    depends_on:
-      - client_build
     volumes:
       - client_dist:/out
-    command: ["sh", "-c", "rm -rf /out/* && cp -a /dist/. /out/ && echo 'client published'"]
+    command: ["sh", "-c", "rm -rf /out/* && cp -a /dist/. /out/ && echo 'client published to volume'"]
     restart: "no"
 
   nginx:
