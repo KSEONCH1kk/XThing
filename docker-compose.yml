@@ -1,29 +1,115 @@
-version: "3.9"
+name: xthing
+
+# Production stack: Postgres, Redis, Server (Fastify), Nginx (TLS), Certbot.
+#
+# Запуск с нуля:
+#   1) cp .env.docker.example .env.docker  &&  отредактировать
+#   2) docker compose build server client_build
+#   3) docker compose up -d postgres redis server
+#   4) docker compose up client_publisher          # одноразовый, опубликует статику
+#   5) ./scripts/init-letsencrypt.sh               # получить сертификаты
+#   6) docker compose up -d certbot                # включить автообновление
+#
+# Для локальной разработки используйте docker-compose.dev.yml.
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: xthing-pg
     restart: unless-stopped
     environment:
       POSTGRES_USER: xthing
-      POSTGRES_PASSWORD: xthing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: xthing
-    ports:
-      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./server/src/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - pg_data:/var/lib/postgresql/data
+      - ./server/src/schema.pg.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xthing -d xthing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: xthing-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
     volumes:
-      - redisdata:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: xthing-server:latest
+    restart: unless-stopped
+    env_file: .env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "4000"
+
+  # Однократный билд клиента: артефакт-образ с /dist
+  client_build:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+      args:
+        VITE_API_URL: https://${API_DOMAIN}
+        VITE_WS_URL: wss://${API_DOMAIN}
+    image: xthing-client:latest
+    profiles: ["build"]
+
+  # Копирует /dist из client-образа в named volume client_dist (его маунтит nginx).
+  # Запускать каждый раз после пересборки client_build.
+  client_publisher:
+    image: xthing-client:latest
+    depends_on:
+      - client_build
+    volumes:
+      - client_dist:/out
+    command: ["sh", "-c", "rm -rf /out/* && cp -a /dist/. /out/ && echo 'client published'"]
+    restart: "no"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - client_dist:/usr/share/nginx/html:ro
+    # Раз в 6 часов перечитываем конфиг — подхватывает обновлённые сертификаты.
+    command: >-
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >-
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
 
 volumes:
-  pgdata:
-  redisdata:
+  pg_data:
+  redis_data:
+  certbot_certs:
+  certbot_www:
+  client_dist:

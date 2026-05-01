@@ -22,8 +22,8 @@
     "dist:win": "npm run build:client && npm run build:electron && npm --workspace electron run dist",
     "android:sync": "npm run build:client && npx cap sync android",
     "android:open": "npx cap open android",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:up": "docker compose -f docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
