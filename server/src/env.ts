@@ -20,7 +20,7 @@ const schema = z.object({
   SERVER_CONFIG_AES_KEY: z
     .string()
     .length(64, "must be 64 hex chars (32 bytes)")
-    .default("0000000000000000000000000000000000000000000000000000000000000000"),
+    .default("db45cacca3f2628ca014cba4916b791471d8ddc0ced85f38ebc4496807096ebc"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
 });
 

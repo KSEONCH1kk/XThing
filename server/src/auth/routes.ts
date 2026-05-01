@@ -76,7 +76,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const r = signRefresh();
     await persistRefresh(userId, r.hash, r.expiresAt);
     setRefreshCookie(reply, r.token);
-    return reply.send({ access, user: { id: userId, email } });
+    // refresh в теле — для клиентов где cookie cross-site не приживаются
+    // (Capacitor WebView, native iOS/desktop). На web достаточно cookie.
+    return reply.send({ access, refresh: r.token, user: { id: userId, email } });
   });
 
   app.post("/auth/login", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
@@ -97,12 +99,21 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const rt = signRefresh();
     await persistRefresh(u.id, rt.hash, rt.expiresAt);
     setRefreshCookie(reply, rt.token);
-    return reply.send({ access, user: { id: u.id, email } });
+    return reply.send({ access, refresh: rt.token, user: { id: u.id, email } });
   });
 
   app.post("/auth/refresh", async (req, reply) => {
-    const token = (req as any).cookies?.[refreshCookie];
+    // Принимаем токен либо из httpOnly-cookie (web), либо из заголовка
+    // X-Refresh-Token / тела (Capacitor / native, где cross-site cookie не
+    // переживают перезапуск приложения).
+    const headerToken = (req.headers["x-refresh-token"] as string | undefined)?.trim();
+    const bodyToken = typeof (req.body as any)?.refresh === "string"
+      ? ((req.body as any).refresh as string)
+      : undefined;
+    const cookieToken = (req as any).cookies?.[refreshCookie];
+    const token = headerToken || bodyToken || cookieToken;
     if (!token) return reply.code(401).send({ error: "Нет refresh-токена" });
+
     const hash = verifyRefreshHash(token);
     const row = await findRefresh(hash);
     if (!row || row.revoked || row.expires_at.getTime() < Date.now()) {
@@ -118,11 +129,16 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     await persistRefresh(row.user_id, next.hash, next.expiresAt);
     setRefreshCookie(reply, next.token);
     const access = await reply.jwtSign({ sub: row.user_id, email });
-    return reply.send({ access });
+    return reply.send({ access, refresh: next.token });
   });
 
   app.post("/auth/logout", async (req, reply) => {
-    const token = (req as any).cookies?.[refreshCookie];
+    const headerToken = (req.headers["x-refresh-token"] as string | undefined)?.trim();
+    const bodyToken = typeof (req.body as any)?.refresh === "string"
+      ? ((req.body as any).refresh as string)
+      : undefined;
+    const cookieToken = (req as any).cookies?.[refreshCookie];
+    const token = headerToken || bodyToken || cookieToken;
     if (token) {
       const hash = verifyRefreshHash(token);
       await revokeRefresh(hash);
