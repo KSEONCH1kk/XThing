@@ -1,0 +1,33 @@
+version: "3.9"
+
+# Dev-конфиг: только Postgres + Redis для локальной разработки.
+# Запуск: npm run db:up    →    docker compose -f docker-compose.dev.yml up -d
+# Server и client запускаются обычным `npm run dev` на хосте.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: xthing-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: xthing
+      POSTGRES_PASSWORD: xthing
+      POSTGRES_DB: xthing
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./server/src/schema.pg.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: xthing-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

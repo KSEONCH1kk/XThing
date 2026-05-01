@@ -1,0 +1,29 @@
+# XThing — Client static build
+# Собирает Vite-бандл и упаковывает в маленький busybox-образ для копирования
+# через client_publisher → named volume → nginx.
+
+FROM node:20-alpine AS builder
+WORKDIR /build
+
+# Capacitor-плагин — file: dependency, нужен для npm install client'а
+COPY capacitor-plugin-xthing-vpn ./capacitor-plugin-xthing-vpn
+COPY client ./client
+
+WORKDIR /build/client
+
+# Build-time переменные — определяют куда client будет ходить за API.
+# Перебилдить если меняется домен.
+ARG VITE_API_URL=https://api.example.com
+ARG VITE_WS_URL=wss://api.example.com
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+
+RUN npm install --no-audit --no-fund && npx vite build
+
+
+# Финальный образ — только статика, минимальный busybox
+FROM busybox:stable
+COPY --from=builder /build/client/dist /dist
+# Команды нет — образ используется как «контейнер с артефактом»,
+# из которого client_publisher копирует /dist в shared volume.
+CMD ["sh", "-c", "echo 'XThing client artifact image. Use client_publisher to copy /dist to a volume.'"]

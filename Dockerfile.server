@@ -1,0 +1,35 @@
+# XThing — Server image (Fastify API)
+# Multi-stage: сборка → runtime со standalone-зависимостями server'а.
+# Workspace в этом образе НЕ используется (server/package.json содержит
+# все нужные deps напрямую) — образ остаётся компактным.
+
+FROM node:20-alpine AS builder
+WORKDIR /build
+
+# Копируем только server-файлы для билда
+COPY server/package.json server/tsconfig.json ./
+COPY server/scripts ./scripts
+COPY server/src ./src
+
+# Все deps включая dev (typescript, tsx)
+RUN npm install --no-audit --no-fund
+
+# Компилим TS → dist + копируем .sql файлы рядом
+RUN npx tsc -p tsconfig.json && node scripts/copy-sql.cjs
+
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Только prod-зависимости
+COPY server/package.json ./
+RUN npm install --omit=dev --no-audit --no-fund && \
+    npm cache clean --force
+
+# Скомпилированный код + .sql миграции
+COPY --from=builder /build/dist ./dist
+
+EXPOSE 4000
+USER node
+CMD ["node", "dist/index.js"]
