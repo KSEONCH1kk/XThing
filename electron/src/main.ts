@@ -1,14 +1,78 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import dotenv from "dotenv";
 import { VpnManager } from "./vpn/manager";
 import { decryptConfig } from "./crypto";
 
-// Загружаем .env из корня проекта (в dev) или из ресурсов (в проде).
-dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
+// ---- Файловое логирование ----
+// В упакованном exe нет stdout. Пишем всё в %APPDATA%\XThing\xthing.log
+// (на Windows) — его можно открыть пока приложение работает.
+function setupFileLogger() {
+  try {
+    const userDir = app.getPath("userData");
+    fs.mkdirSync(userDir, { recursive: true });
+    const logPath = path.join(userDir, "xthing.log");
+    const stream = fs.createWriteStream(logPath, { flags: "w" });
+
+    const wrap = (orig: (...a: any[]) => void, level: string) =>
+      (...args: any[]) => {
+        const line =
+          `[${new Date().toISOString()}] [${level}] ` +
+          args
+            .map((a) =>
+              typeof a === "string" ? a : a instanceof Error ? a.stack || String(a) : JSON.stringify(a)
+            )
+            .join(" ") +
+          "\n";
+        try {
+          stream.write(line);
+        } catch {}
+        orig.apply(console, args);
+      };
+
+    console.log = wrap(console.log, "log");
+    console.warn = wrap(console.warn, "warn");
+    console.error = wrap(console.error, "error");
+    console.info = wrap(console.info, "info");
+
+    process.on("uncaughtException", (e) => {
+      try {
+        stream.write(`[${new Date().toISOString()}] [FATAL] ${e.stack || e}\n`);
+      } catch {}
+    });
+    process.on("unhandledRejection", (e: any) => {
+      try {
+        stream.write(`[${new Date().toISOString()}] [REJECT] ${e?.stack || e}\n`);
+      } catch {}
+    });
+
+    console.log(`[xthing] log file: ${logPath}`);
+  } catch {
+    /* fail silently */
+  }
+}
+setupFileLogger();
+
+// .env читается:
+//  - в dev: из корня проекта
+//  - в packaged-режиме: из process.resourcesPath/.env (туда копирует electron-builder)
+const envCandidates = app.isPackaged
+  ? [
+      path.join(process.resourcesPath, ".env"),
+      path.join(path.dirname(app.getPath("exe")), ".env"),
+    ]
+  : [path.join(__dirname, "..", "..", ".env")];
+
+for (const p of envCandidates) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
 
 // Совпадает с дефолтом server/src/env.ts — для dev-режима без явного ключа.
-const DEFAULT_DEV_AES_KEY = "0".repeat(64);
+const DEFAULT_DEV_AES_KEY = "f047ce40c922a9828e1fbe058882757d36b29a53a1ea7c9c4995362b807c16b3";
 const AES_KEY = process.env.SERVER_CONFIG_AES_KEY || process.env.XTHING_AES_KEY || DEFAULT_DEV_AES_KEY;
 
 const isDev = process.env.NODE_ENV === "development";
@@ -39,11 +103,14 @@ function createWindow() {
   win.on("maximize", () => win?.webContents.send("window:maximized", true));
   win.on("unmaximize", () => win?.webContents.send("window:maximized", false));
 
-  if (isDev) {
-    win.loadURL("http://localhost:5173");
-  } else {
-    win.loadFile(path.join(process.resourcesPath, "client", "index.html"));
-  }
+  // Клиент грузим по URL и в dev, и в проде — тот же origin, никаких CORS-проблем.
+  // URL можно переопределить через XTHING_CLIENT_URL в .env (полезно если хочешь
+  // тестить exe против стейджинга без пересборки).
+  const clientUrl =
+    process.env.XTHING_CLIENT_URL ||
+    (isDev ? "http://localhost:5173" : "https://ccc.intave.tech");
+  console.log(`[xthing] loading client from ${clientUrl}`);
+  win.loadURL(clientUrl);
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

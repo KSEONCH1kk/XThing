@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useMemo } from "react";
-import { continents, countryCenter, MAP_H, MAP_W, project } from "../lib/world-data";
+import { countryCenter } from "../lib/world-data";
+import { countries, countryPath, iso2ToNumeric, MAP_H, MAP_W, project } from "../lib/world-geo";
 import { useUserGeo } from "../store/userGeo";
 import { useVpn } from "../store/vpn";
 import type { Server, VpnState } from "../types";
@@ -11,11 +12,6 @@ interface Props {
   state: VpnState;
 }
 
-/**
- * Карта мира + дуга от пользователя к выбранному серверу.
- * При connected дуга подсвечивается, по ней «течёт» поток (анимация
- * strokeDashoffset).
- */
 function UserLocationLabel() {
   const userGeo = useUserGeo((s) => s.geo);
   const loading = useUserGeo((s) => s.loading);
@@ -79,19 +75,14 @@ export function RouteMap({ server, state }: Props) {
     fetchIfNeeded();
   }, [fetchIfNeeded]);
 
-  const continentPaths = useMemo(
-    () =>
-      continents.map((c) => {
-        const d =
-          c.points
-            .map(([lng, lat], i) => {
-              const p = project(lat, lng);
-              return `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-            })
-            .join(" ") + " Z";
-        return { name: c.name, d };
-      }),
-    []
+  // ISO numeric коды стран user'а и сервера — для подсветки на карте
+  const userCountryNum = useMemo(
+    () => (userGeo?.country ? iso2ToNumeric(userGeo.country) : undefined),
+    [userGeo]
+  );
+  const serverCountryNum = useMemo(
+    () => (server?.countryCode ? iso2ToNumeric(server.countryCode) : undefined),
+    [server]
   );
 
   const userPoint = userGeo ? project(userGeo.lat, userGeo.lng) : null;
@@ -114,7 +105,6 @@ export function RouteMap({ server, state }: Props) {
     const dist = Math.hypot(dx, dy);
     const mx = (userPoint.x + serverPoint.x) / 2;
     const my = (userPoint.y + serverPoint.y) / 2;
-    // Поднимаем control point вверх (на север). Чем дальше — тем выше.
     const lift = Math.min(140, dist * 0.45);
     const cx = mx;
     const cy = my - lift;
@@ -123,6 +113,18 @@ export function RouteMap({ server, state }: Props) {
 
   const lineStroke = isConnected ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)";
   const lineWidth = isConnected ? 1.8 : 1.2;
+
+  // Пред-рендер всех путей стран — один раз, не зависит от state
+  const countryRender = useMemo(
+    () =>
+      countries.map((f, i) => {
+        const id = String(f.id ?? "");
+        const d = countryPath(f);
+        if (!d) return null;
+        return { key: i, id, d };
+      }),
+    []
+  );
 
   return (
     <div className="w-full bg-bg-card border border-line rounded-card overflow-hidden">
@@ -145,21 +147,29 @@ export function RouteMap({ server, state }: Props) {
 
         <rect width={MAP_W} height={MAP_H} fill="url(#rmgrid)" />
 
-        {continentPaths.map((c) => (
-          <path
-            key={c.name}
-            d={c.d}
-            fill="rgba(255,255,255,0.08)"
-            stroke="rgba(255,255,255,0.16)"
-            strokeWidth="0.6"
-            strokeLinejoin="round"
-          />
-        ))}
+        {/* Все страны мира — реальная геометрия из Natural Earth.
+            Страны user'а и сервера подсвечиваются ярче. */}
+        {countryRender.map((c) => {
+          if (!c) return null;
+          const isUser = userCountryNum && c.id === userCountryNum;
+          const isServer = serverCountryNum && c.id === serverCountryNum;
+          const highlighted = isUser || isServer;
+          return (
+            <path
+              key={c.key}
+              d={c.d}
+              fill={highlighted ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.05)"}
+              stroke={highlighted ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.12)"}
+              strokeWidth={highlighted ? 0.6 : 0.3}
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        })}
 
         {/* Маршрут: дуга от пользователя к серверу */}
         {arcPath ? (
           <>
-            {/* Подложка дуги (всегда видна, дает «трассу») */}
             <path
               d={arcPath}
               fill="none"
@@ -167,9 +177,7 @@ export function RouteMap({ server, state }: Props) {
               strokeWidth={3}
               strokeLinecap="round"
             />
-            {/* Активная линия */}
             {isConnected ? (
-              // При connected — анимированные dash-сегменты текут по дуге
               <motion.path
                 d={arcPath}
                 fill="none"

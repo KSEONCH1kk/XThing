@@ -13,6 +13,10 @@ extraResources:
     to: bin
     filter:
       - "**/*"
+  # Production .env (содержит SERVER_CONFIG_AES_KEY).
+  # Создаётся вручную перед сборкой: electron/.env.prod
+  - from: .env.prod
+    to: .env
 win:
   target:
     - target: nsis

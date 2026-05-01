@@ -8,6 +8,8 @@ release
 .env
 .env.local
 .env.docker
+.env.prod
+electron/.env.prod
 *.log
 coverage
 .vite
@@ -20,3 +22,4 @@ android/.gradle
 ios/App/build
 electron/bin/*
 !electron/bin/.gitkeep
+/client/.env.production
