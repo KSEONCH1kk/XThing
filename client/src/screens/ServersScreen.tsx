@@ -21,6 +21,8 @@ export function ServersScreen() {
   const [loading, setLoading] = useState(false);
   const selectedId = useVpn((s) => s.selectedServerId);
   const setSelected = useVpn((s) => s.setSelectedServer);
+  const switchServer = useVpn((s) => s.switchServer);
+  const status = useVpn((s) => s.status);
   const toast = useToast((s) => s.push);
 
   const refresh = async () => {
@@ -105,8 +107,16 @@ export function ServersScreen() {
                 server={s}
                 selected={selectedId === s.id}
                 onClick={() => {
+                  // Если активная сессия — switchServer запустит реконнект на
+                  // выбранный, иначе просто выберет.
+                  const wasActive = status.state === "connected" || status.state === "connecting";
+                  void switchServer(s);
                   setSelected(s.id);
-                  toast({ kind: "info", title: t("main.serverChosen"), message: s.name });
+                  toast({
+                    kind: "info",
+                    title: wasActive ? t("main.serverSwitching") : t("main.serverChosen"),
+                    message: s.name,
+                  });
                 }}
               />
             </motion.div>

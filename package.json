@@ -6,20 +6,21 @@
   "workspaces": [
     "client",
     "server",
-    "electron",
     "capacitor-plugin-xthing-vpn"
   ],
   "scripts": {
     "dev": "concurrently -k -n server,client -c \"yellow,cyan\" \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --workspace server run dev",
     "dev:client": "npm --workspace client run dev",
-    "dev:electron": "npm --workspace electron run dev",
+    "dev:electron": "npm --prefix electron run dev",
     "seed": "npm --workspace server run seed",
     "build:client": "npm --workspace client run build",
     "build:server": "npm --workspace server run build",
-    "build:electron": "npm --workspace electron run build",
+    "build:electron": "npm --prefix electron run build",
     "build:all": "npm run build:server && npm run build:client && npm run build:electron",
-    "dist:win": "npm run build:client && npm run build:electron && npm --workspace electron run dist",
+    "dist:win": "npm run build:client && npm run build:electron && npm --prefix electron run dist",
+    "make:win": "npm run build:client && npm --prefix electron run make",
+    "package:win": "npm run build:client && npm --prefix electron run package",
     "android:sync": "npm run build:client && npx cap sync android",
     "android:open": "npx cap open android",
     "db:up": "docker compose -f docker-compose.dev.yml up -d",
@@ -33,6 +34,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
-    "@capacitor/core": "^6.1.2"
+    "@capacitor/core": "^6.1.2",
+    "capacitor-plugin-xthing-vpn": "*"
   }
 }

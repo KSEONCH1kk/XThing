@@ -23,3 +23,5 @@ ios/App/build
 electron/bin/*
 !electron/bin/.gitkeep
 /client/.env.production
+/hev-socks5-tunnel/
+/hysteria/

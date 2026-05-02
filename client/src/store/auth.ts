@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, bindUnauthorized, setAccessToken } from "../api/client";
+import { api, bindUnauthorized, getRefreshToken, setAccessToken, setRefreshToken } from "../api/client";
 import type { User, Subscription } from "../types";
 
 interface AuthState {
@@ -32,20 +32,27 @@ export const useAuth = create<AuthState>((set, get) => ({
   bootstrap: async () => {
     bindUnauthorized(() => {
       setAccessToken(null);
+      setRefreshToken(null);
       set({ user: null, subscription: null });
     });
     try {
+      const stored = getRefreshToken();
       const r = await fetchWithTimeout(API_URL + "/auth/refresh", {
         method: "POST",
         credentials: "include",
+        headers: stored ? { "X-Refresh-Token": stored } : {},
         timeoutMs: 4000,
       });
       if (r.ok) {
         const j = await r.json();
         setAccessToken(j.access);
+        if (typeof j.refresh === "string") setRefreshToken(j.refresh);
         const me = await api<User>("/user/me");
         set({ user: me });
         await get().refreshSubscription();
+      } else if (r.status === 401) {
+        // мёртвый или отсутствующий refresh — чистим, чтобы не дёргать его снова.
+        setRefreshToken(null);
       }
     } catch {
       // backend не отвечает или нет refresh-cookie — просто покажем экран входа
@@ -55,34 +62,41 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   login: async (email, password) => {
-    const r = await api<{ access: string; user: User }>("/auth/login", {
+    const r = await api<{ access: string; refresh?: string; user: User }>("/auth/login", {
       method: "POST",
       auth: false,
       body: JSON.stringify({ email, password }),
     });
     setAccessToken(r.access);
+    if (r.refresh) setRefreshToken(r.refresh);
     set({ user: r.user });
     await get().refreshSubscription();
   },
 
   register: async (email, password, key) => {
-    const r = await api<{ access: string; user: User }>("/auth/register", {
+    const r = await api<{ access: string; refresh?: string; user: User }>("/auth/register", {
       method: "POST",
       auth: false,
       body: JSON.stringify({ email, password, key }),
     });
     setAccessToken(r.access);
+    if (r.refresh) setRefreshToken(r.refresh);
     set({ user: r.user });
     await get().refreshSubscription();
   },
 
   logout: async () => {
+    const stored = getRefreshToken();
     try {
-      await api("/auth/logout", { method: "POST" });
+      await api("/auth/logout", {
+        method: "POST",
+        headers: stored ? { "X-Refresh-Token": stored } : {},
+      });
     } catch {
       /* ignore */
     }
     setAccessToken(null);
+    setRefreshToken(null);
     set({ user: null, subscription: null });
   },
 

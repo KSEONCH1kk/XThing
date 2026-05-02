@@ -9,6 +9,9 @@
     "android/src/main/",
     "android/build.gradle",
     "android/proguard-rules.pro",
+    "ios/Plugin/",
+    "ios/PacketTunnelProvider/",
+    "ios-setup.md",
     "stub.js",
     "stub.d.ts",
     "src/",
@@ -21,6 +24,9 @@
   "capacitor": {
     "android": {
       "src": "android"
+    },
+    "ios": {
+      "src": "ios"
     }
   },
   "devDependencies": {

@@ -5,6 +5,16 @@ import dotenv from "dotenv";
 import { VpnManager } from "./vpn/manager";
 import { decryptConfig } from "./crypto";
 
+// Squirrel.Windows во время install/uninstall запускает приложение с
+// флагами --squirrel-install / --squirrel-uninstall и т.д. Этот модуль
+// обрабатывает их (создаёт ярлыки и т.п.) и сразу закрывает процесс.
+// Без него инсталлятор зависает на этапе пост-установки.
+// require, а не import — пакет существует только в win32-сборке.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+if (process.platform === "win32" && require("electron-squirrel-startup")) {
+  app.quit();
+}
+
 // ---- Файловое логирование ----
 // В упакованном exe нет stdout. Пишем всё в %APPDATA%\XThing\xthing.log
 // (на Windows) — его можно открыть пока приложение работает.
@@ -108,7 +118,7 @@ function createWindow() {
   // тестить exe против стейджинга без пересборки).
   const clientUrl =
     process.env.XTHING_CLIENT_URL ||
-    (isDev ? "http://localhost:5173" : "https://ccc.intave.tech");
+    (isDev ? "https://ccc.intave.tech" : "https://ccc.intave.tech");
   console.log(`[xthing] loading client from ${clientUrl}`);
   win.loadURL(clientUrl);
 

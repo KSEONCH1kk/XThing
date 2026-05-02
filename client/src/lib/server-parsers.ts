@@ -45,8 +45,11 @@ function safeNum(v: any, fallback: number): number {
 
 function parseVlessUri(uri: string): ParsedServer | null {
   try {
-    const u = new URL(uri);
-    if (u.protocol !== "vless:") return null;
+    // vless — non-special scheme в WHATWG URL: host/username остаются пустыми,
+    // всё уходит в pathname. Подменяем на https:, структура совпадает.
+    if (!/^vless:\/\//i.test(uri)) return null;
+    const normalized = uri.replace(/^vless:/i, "https:");
+    const u = new URL(normalized);
     const id = decodeURIComponent(u.username || "");
     if (!id) return null;
     const address = u.hostname;

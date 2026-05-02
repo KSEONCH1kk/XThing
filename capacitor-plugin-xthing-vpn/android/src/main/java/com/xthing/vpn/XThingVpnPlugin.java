@@ -1,12 +1,16 @@
 package com.xthing.vpn;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.net.VpnService;
+import android.os.Build;
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -14,8 +18,15 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
-@CapacitorPlugin(name = "XThingVpn")
+@CapacitorPlugin(
+    name = "XThingVpn",
+    permissions = {
+        @Permission(strings = { Manifest.permission.POST_NOTIFICATIONS }, alias = "notifications")
+    }
+)
 public class XThingVpnPlugin extends Plugin {
 
     public static final String EVENT_STATUS = "status";
@@ -77,7 +88,37 @@ public class XThingVpnPlugin extends Plugin {
             return;
         }
 
-        // 1) Получаем разрешение VpnService (если ещё нет)
+        // На Android 13+ POST_NOTIFICATIONS запрашивается runtime — без него
+        // foreground-нотификация просто не отображается, и пользователь не
+        // увидит, что VPN работает (плюс на новых версиях это может приводить
+        // к остановке foreground-сервиса).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            pendingConnect = call;
+            call.setKeepAlive(true);
+            requestPermissionForAlias("notifications", call, "onNotifPermResult");
+            return;
+        }
+
+        proceedConnect(call, protocol, address, port, payload);
+    }
+
+    @PermissionCallback
+    private void onNotifPermResult(PluginCall call) {
+        // Игнорируем отказ — VPN всё равно поднимаем, просто без нотификации
+        // (на Android 14+ это рискованно, но мы не хотим блокировать flow).
+        proceedConnect(
+            call,
+            call.getString("protocol"),
+            call.getString("address"),
+            call.getInt("port"),
+            call.getString("payload")
+        );
+    }
+
+    private void proceedConnect(PluginCall call, String protocol, String address, Integer port, String payload) {
+        // Получаем разрешение VpnService (если ещё нет)
         Intent prepareIntent = VpnService.prepare(getContext());
         if (prepareIntent != null) {
             pendingConnect = call;

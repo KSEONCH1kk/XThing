@@ -1,5 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
+const REFRESH_KEY = "xthing.refresh";
+
 let accessToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
 
@@ -13,12 +15,35 @@ export function bindUnauthorized(cb: () => void) {
   onUnauthorized = cb;
 }
 
+// Refresh-token хранится в localStorage параллельно с httpOnly-cookie.
+// На web это дублирование не нужно, но в Capacitor WebView cross-site cookie
+// не переживают перезапуск приложения — поэтому полагаемся на storage.
+export function getRefreshToken(): string | null {
+  try { return localStorage.getItem(REFRESH_KEY); } catch { return null; }
+}
+export function setRefreshToken(t: string | null) {
+  try {
+    if (t) localStorage.setItem(REFRESH_KEY, t);
+    else localStorage.removeItem(REFRESH_KEY);
+  } catch {}
+}
+
 async function refresh(): Promise<boolean> {
   try {
-    const r = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
-    if (!r.ok) return false;
+    const stored = getRefreshToken();
+    const r = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: stored ? { "X-Refresh-Token": stored } : {},
+    });
+    if (!r.ok) {
+      // refresh-токен мёртв — выкидываем, чтобы не зацикливаться.
+      if (r.status === 401) setRefreshToken(null);
+      return false;
+    }
     const j = await r.json();
     accessToken = j.access;
+    if (typeof j.refresh === "string") setRefreshToken(j.refresh);
     return true;
   } catch {
     return false;

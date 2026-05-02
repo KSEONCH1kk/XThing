@@ -6,10 +6,14 @@ const config: CapacitorConfig = {
   webDir: "client/dist",
   server: {
     androidScheme: "https",
+    iosScheme: "capacitor",  // origin страницы будет capacitor://localhost
   },
   android: {
     minWebViewVersion: 80,
     allowMixedContent: false,
+  },
+  ios: {
+    contentInset: "always",
   },
   plugins: {
     SplashScreen: {

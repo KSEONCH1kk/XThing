@@ -83,8 +83,16 @@ export class VpnManager extends EventEmitter {
     this.startedAt = Date.now();
     this.currentProtocol = args.protocol;
 
-    this.proc.stdout?.on("data", (chunk: Buffer) => this.fallbackParse(chunk.toString()));
-    this.proc.stderr?.on("data", (chunk: Buffer) => this.fallbackParse(chunk.toString()));
+    this.proc.stdout?.on("data", (chunk: Buffer) => {
+      const s = chunk.toString();
+      console.log(`[${exe}] stdout:`, s.trim());
+      this.fallbackParse(s);
+    });
+    this.proc.stderr?.on("data", (chunk: Buffer) => {
+      const s = chunk.toString();
+      console.log(`[${exe}] stderr:`, s.trim());
+      this.fallbackParse(s);
+    });
 
     this.proc.on("exit", (code) => {
       this.cleanupCfg();

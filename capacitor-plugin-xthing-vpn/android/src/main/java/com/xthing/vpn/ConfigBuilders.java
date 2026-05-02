@@ -49,7 +49,12 @@ public final class ConfigBuilders {
                 .put("serverName", p.optString("sni", "www.cloudflare.com"))
                 .put("publicKey", p.optString("pbk", ""))
                 .put("shortId", p.optString("sid", ""))
-                .put("fingerprint", p.optString("fp", "chrome")));
+                .put("fingerprint", p.optString("fp", "chrome"))
+                // spiderX (`spx`) — путь маскировочного HTTPS-запроса при reality
+                // handshake'е. Дефолт xray = "/", но мы передаём явно, чтобы
+                // совпадало со всем, что прислал URI (некоторые серверы это
+                // фактически проверяют через ASN/path-bind).
+                .put("spiderX", p.optString("spx", "/")));
         } else if ("tls".equals(stream.getString("security"))) {
             stream.put("tlsSettings", new JSONObject().put("serverName", p.optString("sni", address)));
         }

@@ -18,7 +18,10 @@ buildscript {
 apply plugin: 'com.android.library'
 
 android {
-    namespace "com.xthing.vpn"
+    // Namespace должен быть уникален между модулями (AGP 8). Это R-namespace
+    // плагина — Java-классы остаются в пакете com.xthing.vpn, потребители
+    // импортируют их по полному имени.
+    namespace "com.xthing.vpn.plugin"
     compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 34
     defaultConfig {
         minSdk project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 26
@@ -39,10 +42,15 @@ android {
 repositories {
     google()
     mavenCentral()
+    // flatDir для libs/ объявлен в корневом android/build.gradle через
+    // allprojects — здесь повторять не нужно.
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
+    // xray-core как gomobile-AAR. Содержит libv2ray.* классы и libgojni.so
+    // для всех ABI — так что отдельные jniLibs для xray не нужны.
+    implementation(name: 'AndroidLibXrayLite', ext: 'aar')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"

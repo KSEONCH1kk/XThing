@@ -9,6 +9,7 @@ interface VlessParams {
   pbk?: string;
   sid?: string;
   fp?: string;
+  spx?: string;
 }
 
 export type RuleKind = "process" | "ip" | "domain" | "regex";
@@ -40,6 +41,9 @@ export function buildXrayConfig(p: VlessParams, routing?: UserRouting) {
       publicKey: p.pbk ?? "",
       shortId: p.sid ?? "",
       fingerprint: p.fp ?? "chrome",
+      // spiderX (URI param `spx`) — путь, который reality-клиент использует
+      // для масквирующего HTTPS-запроса при handshake'е. Дефолт xray = "/".
+      spiderX: p.spx ?? "/",
     };
   } else if (stream.security === "tls") {
     stream.tlsSettings = { serverName: p.sni ?? p.address };
@@ -103,6 +107,20 @@ export function buildXrayConfig(p: VlessParams, routing?: UserRouting) {
   };
 }
 
+// Список private/loopback/link-local сетей. Раньше использовали алиас
+// xray-core "geoip:private", но он требует geoip.dat рядом с xray.exe —
+// если файла нет, процесс падает с GetFileAttributesEx geoip.dat.
+const PRIVATE_CIDR = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "::1/128",
+  "fc00::/7",
+  "fe80::/10",
+];
+
 function buildRouting(r?: UserRouting) {
   const rules: any[] = [
     // API всегда отдельно
@@ -111,7 +129,7 @@ function buildRouting(r?: UserRouting) {
     {
       type: "field",
       outboundTag: "direct",
-      ip: ["geoip:private"],
+      ip: PRIVATE_CIDR,
     },
   ];
 
@@ -134,7 +152,13 @@ function buildRouting(r?: UserRouting) {
           entry.domains.push(`regexp:${rule.value}`);
           break;
         case "ip":
-          entry.ips.push(rule.value);
+          // geoip:* требует geoip.dat — пропускаем такие правила (см. коммент
+          // выше про geosite). Обычные CIDR/IP — пропускаем как есть.
+          if (rule.value.startsWith("geoip:")) {
+            console.warn("[xray] правило", rule.value, "пропущено — geoip.dat не поставляется в bin/");
+          } else {
+            entry.ips.push(rule.value);
+          }
           break;
         case "process":
           entry.processes.push(rule.value);
@@ -174,7 +198,14 @@ function buildRouting(r?: UserRouting) {
  * "geosite:cn"    → "geosite:cn" (как есть)
  */
 function translateDomain(v: string): string {
-  if (v.startsWith("geosite:") || v.startsWith("regexp:") || v.startsWith("domain:") || v.startsWith("full:") || v.startsWith("keyword:")) {
+  // geosite:* требует geosite.dat в папке xray. Если файла нет, xray-core
+  // падает на старте. Игнорируем — пользователь увидит правило в админке,
+  // но в рантайме оно молча будет домен-suffix'ом без geo-эффекта.
+  if (v.startsWith("geosite:")) {
+    console.warn("[xray] правило", v, "пропущено — geosite.dat не поставляется в bin/");
+    return `domain:${v.slice("geosite:".length)}`;
+  }
+  if (v.startsWith("regexp:") || v.startsWith("domain:") || v.startsWith("full:") || v.startsWith("keyword:")) {
     return v;
   }
   if (v.startsWith("*.")) return `domain:${v.slice(2)}`;
